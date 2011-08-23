@@ -1,0 +1,18 @@
+{
+	"name": "8comic - link generator",
+	"version": "0.2",
+	"description": "Generate links to comic images on http://www.8comic.com/ for batch download.",
+	"background_page": "background.html",	
+	"page_action" :
+	{
+		"default_icon": "down-arrow.png",
+		"default_title": "Click me to generate comic download links for this page.",
+		"default_popup": "popup.html" 
+	},	
+	
+	"permissions": 
+	[
+  		"tabs",
+		"http://www.8comic.com/*"
+	]
+}

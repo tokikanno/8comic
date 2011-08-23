@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+<script>
+	var tb;
+	
+	function checkUrl(tabId) {		
+		chrome.tabs.get(tabId, 
+			function(tab) {
+				re = new RegExp('http://www.8comic.com/\\w+/drawing-\\d+\\.html');
+
+	        	if (!re.test(tab.url))
+					return;
+	         	
+				// chrome.tabs.executeScript(null, {file: "8comic.js"});
+				tb = tabId;
+				// ... show the page action.
+	         	chrome.pageAction.show(tabId);
+			})
+	}
+	
+	// Listen for any changes to the URL of any tab.
+	chrome.tabs.onUpdated.addListener(checkUrl);
+	//chrome.tabs.onSelectionChanged.addListener(checkUrl);
+</script>
+ </head>
+</html>

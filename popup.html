@@ -1,0 +1,210 @@
+<html>
+	<head>
+		<meta http-equiv="Content-type" content="text/html; charset=utf-8">
+		<title>Comic Links Generator</title>
+		
+		<link href="css/jquery.loadmask.css" rel="stylesheet" type="text/css" />
+		
+		<script type="text/javascript" src="js/base64.js"></script>
+
+		<script type="text/javascript" src="js/jquery.js"></script>
+		<script type="text/javascript" src="js/jquery.json.js"></script>
+		<script type="text/javascript" src="js/jquery.loadmask.min.js"></script>
+
+<!--		<script type="text/javascript" src="ext-core.js"></script> -->
+		<script type="text/javascript" src="js/aria2.js"></script>
+<script>
+	var itvId = null;
+	var done_aria2_query = false;
+	var done_proc_links = false;
+	var aria2_version = null;
+	var download_list = null;
+	
+	function onRequest(dlist){
+		if (dlist){
+			download_list = dlist;
+			
+			total_links = 0;
+			for (var i = dlist.length - 1; i >= 0; i--){
+				d = dlist[i];
+				total_links += d.urls.length;
+			}
+			
+			$('#link_prompt').html(
+				'Download links found:' +
+				'<ul><li>'+ dlist.length + ' chapters</li><li>' + total_links + ' pic links</li></ul>'
+			);
+
+			$('#start_ch').val(1);
+			$('#end_ch').val(dlist.length);
+			
+		}else{
+			$('#link_prompt').html('No downloadable items found.');
+			download_list = null;
+		}
+
+		done_proc_links = true;
+		
+		$('body').unmask();
+	}
+	
+	function doParse(){
+		$('body').mask('Parsing links ...');
+		$('#link_prompt').html('Parsing links ... ');
+		$('#aria2_prompt').html('Discovering local aria2 rpc server ...');
+		
+		Aria.getVersion(function(ver) {
+			console.log(ver);
+			
+			if (!ver){
+				$('#aria2_prompt').html('No local aria2 rpc server found.');
+				$('#send_to_aria2').attr("disabled", true);
+				aria2_version = null;
+			}else{
+				$('#aria2_prompt').html('Local aria2 rpc server found. Version: ' + ver);
+				$('#send_to_aria2').removeAttr("disabled");
+				aria2_version = ver;
+			}
+			
+			done_aria2_query = true;
+		});
+		
+		chrome.tabs.executeScript(null, {file: "js/8comic.js"});
+	}
+	
+	function get_ch_range(){
+		var send_type = $('input:radio[name=aria2_settings]:checked').val();
+		var start_ch = 0;
+		var end_ch = download_list.length-1;
+	
+		switch(send_type){
+			case 'all':
+				// do nothing
+			break;
+			case 'newest':
+				ch = parseInt($('#newest_ch').val())
+				if (ch <= 0)
+					ch = 1;
+				if (ch < download_list.length)
+					start_ch = download_list.length - ch;
+			break;
+			case 'range':
+				start_ch = parseInt($('#start_ch').val()) - 1;
+				if (start_ch<0)
+					start_ch=0;
+				end_ch = parseInt($('#end_ch').val()) - 1;
+				if (end_ch>=download_list.length)
+					end_ch=download_list.legth-1;
+			break;
+		}
+		
+		if (end_ch < start_ch){
+			tmp = end_ch;
+			end_ch = start_ch;
+			start_ch = tmp;
+		}
+		
+		return {start_ch: start_ch, end_ch: end_ch};
+	}
+	
+	function send_to_aria2() {
+		if (!download_list){
+			window.close();
+			return;
+		}
+	
+		$('body').mask('Sending links to aria2 ...');
+
+		range = get_ch_range();	
+		proc_list = download_list.slice(range.start_ch, range.end_ch);
+		proc_dlist(proc_list);
+	}
+	
+	function proc_dlist(dlist) {
+		if (dlist.length<=0){
+			window.close();
+			return;
+		}
+
+		dl = dlist.shift();
+		
+		// expand all urls contains in dlist
+		urls = [];
+		for (i=0; i < dl.urls.length; i++) {
+			urls.push(dl.prefix + dl.urls[i] + dl.suffix);
+		}
+		
+		// prepare options
+		opts = {dir: dl.dir};
+		
+		Aria.addUris(urls, opts, function(result){
+				if(result)
+					console.log(result);
+				proc_dlist(dlist);
+		});
+	}
+	
+	function proc_generate_list () {
+		$('#links_text').mask('Generating ...');
+		
+		result = '';
+		
+		range = get_ch_range();	
+		
+		switch($('input:radio[name=group_link_format]:checked').val()){
+			case 'aria2':
+				result += '# use\n# aria2c -i <filename>\n# for loading this file into aria2\n';
+				for (var i=range.start_ch; i <=range.end_ch; i++) {
+					dl = download_list[i];
+					for (var j=0; j < dl.urls.length; j++) {
+						result += dl.prefix + dl.urls[j] + dl.suffix + '\n';
+						result += ' dir=' + dl.dir + '\n';
+					}
+				}
+			break;
+			case 'curl':
+				result += '# use\n# curl -K <filename>\n# for loading this file into curl\n';
+				for (var i=range.start_ch; i <=range.end_ch; i++) {
+					dl = download_list[i];
+					for (var j=0; j < dl.urls.length; j++) {
+						result += 'url = "' + dl.prefix + dl.urls[j] + dl.suffix + '"\n';
+						result += 'create-dirs\n';
+						result += 'out = "' + dl.dir + dl.urls[j] + dl.suffix + '"\n\n';
+					}
+				}
+			break;
+		}
+		
+		$('#links_text').html(result);
+		$('#links_text').unmask();
+	}
+			
+	chrome.extension.onRequest.addListener(onRequest);
+	window.onload = function(){
+		$('input[type=text]').focus(function(){
+			console.log(this);
+			$(this).prev('input[type=radio]').attr('checked', 'true');
+		});
+		
+		doParse();
+	}
+</script>
+	</head>
+	
+	<body id="body" style="min-width: 300px;">
+		<div id="link_prompt">No links found.</div>
+		<hr>
+		<div id='aria2_prompt'>No local aria2 server found.</div>
+		<button id='send_to_aria2' disabled='true' onclick='send_to_aria2()'>Send to aria2</button><br>
+		<input type="radio" name="aria2_settings" value="all" checked='true'>All chapters</input><br>
+		<input type="radio" name="aria2_settings" value="newest">Newest <input id='newest_ch' type='text' size='3' value='5'></input> chapters</input><br>
+		<input type="radio" name="aria2_settings" value="range">From chapter <input id='start_ch' type='text' size='3'></input> to chapter <input id='end_ch' type='text' size='3'></input>.</input>
+		<hr>
+		<button onclick='proc_generate_list()'>Generate download list</button><br>
+		<div>Format
+		<input type="radio" name="group_link_format" value="aria2" checked='true'>aria2
+		<input type="radio" name="group_link_format" value="curl">curl
+		</div>
+		<textarea id="links_text" rows=10 cols=50></textarea>
+	</body>
+</html>

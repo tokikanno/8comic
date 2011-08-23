@@ -1,0 +1,252 @@
+/*
+	Copyright(c) toki, 2011
+*/
+
+var Aria = {
+	makeMultiCallCommand: function(method, params){
+		if (!method)
+			return null;
+		if (!params)
+			return {methodName: method};
+		else
+			return {methodName: method, params: params};
+	},
+	
+	makeSingleJSONRPC: function(method, params){
+		if (!method)
+			return '';
+		if (!params){
+			return $.toJSON({
+				jsonrpc: '2.0',
+				id: 'fake',
+				method: method
+			});
+		}else{
+			return $.toJSON({
+				jsonrpc: '2.0',
+				id: 'fake',
+				method: method,
+				params: params
+			});
+		}
+	},
+	
+	getDefaultUrl: function(url){
+		if (!url)
+			return 'http://localhost:6800/jsonrpc';
+		else
+			return url;
+	},
+	
+	/* 
+	get version of aria2
+	params:
+		fn = callback when ajax query to aria2 has done. 
+			fn: function(ver){}
+		url = jsonprc url of aria2
+	*/
+	getVersion: function(fn, url){
+		$.ajax({
+			url: this.getDefaultUrl(url),
+			type: 'POST',
+			data: this.makeSingleJSONRPC('aria2.getVersion'),
+			complete: function(rq, status){
+				if (status=='success'){
+					o = $.evalJSON(rq.responseText);
+					if (o && o.result && o.result.version){
+						if (fn)
+							fn(o.result.version);
+						return;
+					}
+					if (fn)
+						fn(null);
+				}else{
+					if (fn)
+						fn(null);
+				}
+			}
+		});		
+	},
+	
+	/*
+	add uri to aria2 rpc service
+	params:
+		uris: array of uri (will be threated as same file)
+		opts: dictionary 
+		fn: callback function for return the result of addUri
+			fn: function(tid){}
+		pos: position for enqueue into download queue (null for append to the end)
+		url: jsonprc url of aria2
+	*/
+	addUri: function(uris, opts, fn, pos, url){
+		$.ajax({
+			url: this.getDefaultUrl(url),
+			type: 'POST',
+			data: this.makeSingleJSONRPC('aria2.addUri', [uris, opts, pos]),
+			complete: function(rq, status){
+				if (status=='success'){
+					o = $.evalJSON(rq.responseText);
+					if (o && o.result){
+						if(fn)
+							fn(o.result);
+						return;
+					}
+					if(fn)
+						fn(null);
+				}else{
+					if(fn)
+						fn(null);
+				}
+			}
+		});		
+	},
+	
+	/*
+	add multiple uris to aria2 rpc service with same config of opts
+	params:
+		uris: array of uri
+	params:
+		uri download config, all uris added will use the same config.
+	*/
+	addUris: function (uris, opts, fn, url) {
+		cmds = [];
+		
+		for (var i=0; i < uris.length; i++) {
+			cmds.push(this.makeMultiCallCommand('aria2.addUri', [[uris[i]], opts]));
+		}
+		
+		$.ajax({
+			url: this.getDefaultUrl(url),
+			type: 'POST',
+			data: this.makeSingleJSONRPC('system.multicall', [cmds]),
+			complete: function(rq, status){
+				if (status=='success'){
+					o = $.evalJSON(rq.responseText);
+					if (o && o.result){
+						if(fn)
+							fn(o.result);
+						return;
+					}
+					if(fn)
+						fn(null);
+				}else{
+					if(fn)
+						fn(null);
+				}
+			}
+		});		
+	},
+	
+	/*
+	get download mission status of gid
+	params:
+		gid: id of download mission, string
+		keys: property names which we wanna fetch.
+
+           gid
+               GID of this download.
+
+           status
+               "active" for currently downloading/seeding entry. "waiting" for the entry in the queue; download is not started.
+               "paused" for the paused entry. "error" for the stopped download because of error. "complete" for the stopped and
+               completed download. "removed" for the download removed by user.
+
+           totalLength
+               Total length of this download in bytes.
+
+           completedLength
+               Completed length of this download in bytes.
+
+           uploadLength
+               Uploaded length of this download in bytes.
+
+           bitfield
+               Hexadecimal representation of the download progress. The highest bit corresponds to piece index 0. The set bits
+               indicate the piece is available and unset bits indicate the piece is missing. The spare bits at the end are set to
+               zero. When download has not started yet, this key will not be included in the response.
+
+           downloadSpeed
+               Download speed of this download measured in bytes/sec.
+
+           uploadSpeed
+               Upload speed of this download measured in bytes/sec.
+
+           infoHash
+               InfoHash. BitTorrent only.
+
+           numSeeders
+               The number of seeders the client has connected to. BitTorrent only.
+           pieceLength
+               Piece length in bytes.
+
+           numPieces
+               The number of pieces.
+
+           connections
+               The number of peers/servers the client has connected to.
+
+           errorCode
+               The last error code occurred in this download. The value is of type string. The error codes are defined in EXIT
+               STATUS section. This value is only available for stopped/completed downloads.
+
+           followedBy
+               List of GIDs which are generated by the consequence of this download. For example, when aria2 downloaded Metalink
+               file, it generates downloads described in it(see --follow-metalink option). This value is useful to track these auto
+               generated downloads. If there is no such downloads, this key will not be included in the response.
+
+           belongsTo
+               GID of a parent download. Some downloads are a part of another download. For example, if a file in Metalink has
+               BitTorrent resource, the download of .torrent is a part of that file. If this download has no parent, this key will
+               not be included in the response.
+
+           dir
+               Directory to save files. This key is not available for stopped downloads.
+
+           files
+               Returns the list of files. The element of list is the same struct used in aria2.getFiles method.
+
+           bittorrent
+               Struct which contains information retrieved from .torrent file. BitTorrent only. It contains following keys.
+
+               announceList
+                   List of lists of announce URI. If .torrent file contains announce and no announce-list, announce is converted to
+                   announce-list format.
+
+               comment
+                   The comment for the torrent. comment.utf-8 is used if available.
+
+               creationDate
+                   The creation time of the torrent. The value is an integer since the Epoch, measured in seconds.
+
+               mode
+                   File mode of the torrent. The value is either single or multi.
+
+               info
+                   Struct which contains data from Info dictionary. It contains following keys.
+
+               name
+                   name in info dictionary. name.utf-8 is used if available.
+	*/
+	tellStatus: function(gid, keys, fn, url){
+		$.ajax({
+			url: this.getDefaultUrl(url),
+			type: 'POST',
+			data: this.makeSingleJSONRPC('aria2.tellStatus', [gid, keys]),
+			complete: function(rq, status){
+				if (status=='success'){
+					o = $.evalJSON(rq.responseText);
+					if (o && o.result){
+						if(fn)
+							fn(o.result);
+						return;
+					}
+					if(fn)
+						fn(null);
+				}else{
+					if(fn)
+						fn(null);
+				}
+			}
+		});			
+	}
+};
