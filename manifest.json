@@ -1,6 +1,6 @@
 {
 	"name": "8comic - link generator",
-	"version": "0.2",
+	"version": "0.2.1",
 	"description": "Generate links to comic images on http://www.8comic.com/ for batch download.",
 	"background_page": "background.html",	
 	"page_action" :

@@ -72,6 +72,35 @@
 		chrome.tabs.executeScript(null, {file: "js/8comic.js"});
 	}
 	
+	function get_ch_slice() {
+		var send_type = $('input:radio[name=aria2_settings]:checked').val();
+		var start_ch = 0;
+		var end_ch = download_list.length;
+	
+		switch(send_type){
+			case 'newest':
+				ch = parseInt($('#newest_ch').val())
+				if (ch <= 0)
+					ch = 1;
+				return download_list.slice(ch * -1);
+			break;
+			case 'range':
+				start_ch = parseInt($('#start_ch').val()) - 1;
+				if (start_ch<0)
+					start_ch=0;
+				
+				end_ch = parseInt($('#end_ch').val());
+				if (end_ch<0)
+					end_ch = start_ch + 1;
+				
+				return download_list.slice(start_ch, end_ch);				
+			break;
+			case 'all':
+			default: 
+				return download_list.slice(0);
+		}
+	}
+	
 	function get_ch_range(){
 		var send_type = $('input:radio[name=aria2_settings]:checked').val();
 		var start_ch = 0;
@@ -115,8 +144,9 @@
 	
 		$('body').mask('Sending links to aria2 ...');
 
-		range = get_ch_range();	
-		proc_list = download_list.slice(range.start_ch, range.end_ch);
+		range = get_ch_range();
+		// proc_list = download_list.slice(range.start_ch, range.end_ch);
+		proc_list = get_ch_slice(); 
 		proc_dlist(proc_list);
 	}
 	
@@ -149,13 +179,13 @@
 		
 		result = '';
 		
-		range = get_ch_range();	
+		proc_list = get_ch_slice(); 
 		
 		switch($('input:radio[name=group_link_format]:checked').val()){
 			case 'aria2':
 				result += '# use\n# aria2c -i <filename>\n# for loading this file into aria2\n';
-				for (var i=range.start_ch; i <=range.end_ch; i++) {
-					dl = download_list[i];
+				for (var i=0; i < proc_list.length; i++) {
+					dl = proc_list[i];
 					for (var j=0; j < dl.urls.length; j++) {
 						result += dl.prefix + dl.urls[j] + dl.suffix + '\n';
 						result += ' dir=' + dl.dir + '\n';
@@ -164,8 +194,8 @@
 			break;
 			case 'curl':
 				result += '# use\n# curl -K <filename>\n# for loading this file into curl\n';
-				for (var i=range.start_ch; i <=range.end_ch; i++) {
-					dl = download_list[i];
+				for (var i=0; i < proc_list.length; i++) {
+					dl = proc_list[i];
 					for (var j=0; j < dl.urls.length; j++) {
 						result += 'url = "' + dl.prefix + dl.urls[j] + dl.suffix + '"\n';
 						result += 'create-dirs\n';
